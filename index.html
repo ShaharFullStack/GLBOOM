@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="he" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>GLB Viewer עם רקע שיידר נוזלי וניפוץ פרטיקלים</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #000;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        /* רקע השיידר */
+        #shaderCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+        }
+        
+        /* ממשק המשתמש */
+        .ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            max-width: 280px;
+            transition: transform 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .ui-container {
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                max-width: none;
+                padding: 10px;
+                font-size: 14px;
+            }
+        }
+        
+        .ui-container h1 {
+            color: #00ffff;
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+        }
+        
+        @media (max-width: 768px) {
+            .ui-container h1 {
+                font-size: 1em;
+                text-align: center;
+            }
+        }
+        
+        .ui-container label {
+            color: #fff;
+            display: block;
+            margin: 8px 0 4px;
+            font-size: 0.9em;
+        }
+        
+        .ui-container input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        
+        .ui-container button {
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            margin: 8px 5px 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            touch-action: manipulation;
+        }
+        
+        @media (max-width: 768px) {
+            .ui-container button {
+                width: 100%;
+                margin: 5px 0;
+                padding: 12px;
+            }
+        }
+        
+        .ui-container button:hover {
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        
+        .ui-container button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #viewerContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 1.2em;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            max-width: 90vw;
+        }
+        
+        @media (max-width: 768px) {
+            .message {
+                font-size: 1em;
+                padding: 15px;
+            }
+        }
+        
+        #loadingMessage {
+            color: #00ffff;
+        }
+        
+        #errorMessage {
+            color: #ff6666;
+        }
+        
+        .shader-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .shader-controls {
+                bottom: 5px;
+                right: 5px;
+                flex-direction: column;
+            }
+        }
+        
+        .shader-controls button {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            font-size: 12px;
+            touch-action: manipulation;
+        }
+        
+        @media (max-width: 768px) {
+            .shader-controls button {
+                padding: 10px;
+                font-size: 14px;
+            }
+        }
+        
+        .shader-controls button:hover {
+            background: rgba(0, 255, 255, 0.2);
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        
+        @media (max-width: 768px) {
+            .instructions {
+                bottom: 80px;
+                font-size: 12px;
+                padding: 8px 12px;
+            }
+        }
+        
+        .model-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            font-size: 1.5em;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .model-status {
+                font-size: 1.2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- רקע השיידר -->
+    <canvas id="shaderCanvas"></canvas>
+    
+    <!-- ממשק המשתמש -->
+    <div class="ui-container">
+        <h1>🌊 GLB Particle Viewer</h1>
+        
+        <label for="glbFile">בחר קובץ GLB:</label>
+        <input type="file" id="glbFile" accept=".glb,.gltf">
+        
+        <label for="glbUrl">או הכנס URL:</label>
+        <input type="url" id="glbUrl" placeholder="https://example.com/model.glb">
+        
+        <button id="loadModelButton">טען דגם</button>
+        <button id="assembleButton" disabled>הרכב דגם</button>
+        <button id="shatterButton" disabled>נפץ דגם</button>
+    </div>
+    
+    <!-- בקרות השיידר -->
+    <div class="shader-controls">
+        <button onclick="toggleShaderAnimation()">השהה רקע</button>
+        <button onclick="resetShader()">איפוס רקע</button>
+    </div>
+    
+    <!-- הוראות -->
+    <div class="instructions" id="instructions">
+        טען דגם ולחץ עליו או גע בו כדי לנפץ אותו לפרטיקלים!
+    </div>
+    
+    <!-- מיכל הצגת המודל -->
+    <div id="viewerContainer"></div>
+    
+    <!-- הודעות -->
+    <div id="loadingMessage" class="message">
+        <div>טוען דגם...</div>
+    </div>
+    
+    <div id="errorMessage" class="message">
+        <div>שגיאה בטעינת הדגם</div>
+    </div>
+    
+    <!-- סטטוס המודל -->
+    <div id="modelStatus" class="model-status"></div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        // ==================== קוד השיידר (רקע) ====================
+        const shaderCanvas = document.getElementById('shaderCanvas');
+        const gl = shaderCanvas.getContext('webgl');
+        
+        let shaderProgram;
+        let shaderAnimationId;
+        let isShaderAnimating = true;
+        let shaderStartTime = Date.now();
+        
+        if (gl) {
+            initShader();
+            renderShader();
+        }
+        
+        function initShader() {
+            const vertexShaderSource = `
+                attribute vec2 a_position;
+                void main() {
+                    gl_Position = vec4(a_position, 0.0, 1.0);
+                }
+            `;
+            
+            const fragmentShaderSource = `
+                precision mediump float;
+                uniform vec2 u_resolution;
+                uniform float u_time;
+                
+                vec4 tanh_vec4(vec4 x) {
+                    vec4 ex = exp(2.0 * x);
+                    return (ex - 1.0) / (ex + 1.0);
+                }
+                
+                void main() {
+                    vec2 r = u_resolution;
+                    vec2 FC = gl_FragCoord.xy;
+                    float t = u_time;
+                    vec4 o = vec4(0.0);
+                    float l = 0.0;
+                    
+                    vec2 p = (FC * 2.0 - r) / r.y;
+                    l = abs(0.7 - dot(p, p));
+                    vec2 v = p * (1.0 - l) / 0.2;
+                    
+                    for(float i = 1.0; i <= 8.0; i++) {
+                        v += cos(v.yx * i + vec2(0.0, i) + t) / i + 0.7;
+                        vec4 sinValues = sin(vec4(v.x, v.y, v.y, v.x)) + 1.0;
+                        o += sinValues * abs(v.x - v.y) * 0.2;
+                    }
+                    
+                    vec4 colorMult = exp(p.y * vec4(1.0, -1.0, -2.0, 0.0)) * exp(-4.0 * l);
+                    o = tanh_vec4(colorMult / (o + 0.1));
+                    
+                    gl_FragColor = vec4(abs(o.rgb), 0.6);
+                }
+            `;
+            
+            function createShader(gl, type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+            
+            function createProgram(gl, vertexShader, fragmentShader) {
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+                
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error('Program linking error:', gl.getProgramInfoLog(program));
+                    gl.deleteProgram(program);
+                    return null;
+                }
+                return program;
+            }
+            
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+            shaderProgram = createProgram(gl, vertexShader, fragmentShader);
+            
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+            
+            const positionAttributeLocation = gl.getAttribLocation(shaderProgram, 'a_position');
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+        }
+        
+        function renderShader() {
+            if (!isShaderAnimating) return;
+            
+            const displayWidth = window.innerWidth;
+            const displayHeight = window.innerHeight;
+            
+            if (shaderCanvas.width !== displayWidth || shaderCanvas.height !== displayHeight) {
+                shaderCanvas.width = displayWidth;
+                shaderCanvas.height = displayHeight;
+            }
+            
+            gl.viewport(0, 0, shaderCanvas.width, shaderCanvas.height);
+            gl.useProgram(shaderProgram);
+            
+            const resolutionUniformLocation = gl.getUniformLocation(shaderProgram, 'u_resolution');
+            const timeUniformLocation = gl.getUniformLocation(shaderProgram, 'u_time');
+            
+            gl.uniform2f(resolutionUniformLocation, shaderCanvas.width, shaderCanvas.height);
+            gl.uniform1f(timeUniformLocation, (Date.now() - shaderStartTime) * 0.001);
+            
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            
+            shaderAnimationId = requestAnimationFrame(renderShader);
+        }
+        
+        window.toggleShaderAnimation = function() {
+            isShaderAnimating = !isShaderAnimating;
+            if (isShaderAnimating) {
+                renderShader();
+            } else {
+                cancelAnimationFrame(shaderAnimationId);
+            }
+        }
+        
+        window.resetShader = function() {
+            shaderStartTime = Date.now();
+        }
+        
+        // ==================== קוד Three.js ====================
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls;
+        let particlesObject = null;
+        let targetPositions = null;
+        let currentPositions = null;
+        let particleData = [];
+        let isAssembled = false;
+        let isShattering = false;
+        let currentModelUrlForRevoke = null;
+        let lastTime = Date.now();
+        let raycaster, mouse;
+        let currentModel = null;
+        let isInteracting = false;
+
+        const loadModelButton = document.getElementById('loadModelButton');
+        const assembleButton = document.getElementById('assembleButton');
+        const shatterButton = document.getElementById('shatterButton');
+        const glbFileInput = document.getElementById('glbFile');
+        const glbUrlInput = document.getElementById('glbUrl');
+        const viewerContainer = document.getElementById('viewerContainer');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const modelStatus = document.getElementById('modelStatus');
+        const instructions = document.getElementById('instructions');
+
+        function init() {
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 5);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            viewerContainer.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            setupEventListeners();
+            animate();
+        }
+
+        function setupEventListeners() {
+            // Mouse events
+            renderer.domElement.addEventListener('mousedown', onPointerDown);
+            renderer.domElement.addEventListener('mouseup', onPointerUp);
+            
+            // Touch events
+            renderer.domElement.addEventListener('touchstart', onPointerDown);
+            renderer.domElement.addEventListener('touchend', onPointerUp);
+            
+            // Model loading
+            loadModelButton.addEventListener('click', loadModel);
+            assembleButton.addEventListener('click', assembleModel);
+            shatterButton.addEventListener('click', shatterModel);
+            
+            glbFileInput.addEventListener('change', (event) => {
+                if (event.target.files[0]) {
+                    loadModel();
+                }
+            });
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onPointerDown(event) {
+            if (!currentModel && !particlesObject) return;
+            
+            isInteracting = true;
+            const rect = renderer.domElement.getBoundingClientRect();
+            
+            if (event.type === 'mousedown') {
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            } else if (event.type === 'touchstart') {
+                event.preventDefault();
+                const touch = event.touches[0];
+                mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+        }
+
+        function onPointerUp(event) {
+            if (!isInteracting) return;
+            
+            isInteracting = false;
+            
+            if (currentModel && isAssembled) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObject(currentModel, true);
+                
+                if (intersects.length > 0) {
+                    shatterModel();
+                    showStatus('💥 המודל התפוצץ!', 1000);
+                }
+            }
+        }
+
+        function showStatus(text, duration = 2000) {
+            modelStatus.textContent = text;
+            modelStatus.style.opacity = '1';
+            setTimeout(() => {
+                modelStatus.style.opacity = '0';
+            }, duration);
+        }
+
+        function showMessage(messageElement, duration = 3000) {
+            messageElement.style.display = 'block';
+            setTimeout(() => {
+                messageElement.style.display = 'none';
+            }, duration);
+        }
+
+        async function loadModel() {
+            const file = glbFileInput.files[0];
+            const url = glbUrlInput.value.trim();
+
+            if (!file && !url) {
+                showMessage(errorMessage);
+                return;
+            }
+
+            showMessage(loadingMessage);
+            loadModelButton.disabled = true;
+
+            try {
+                const loader = new GLTFLoader();
+                let modelUrl;
+
+                if (file) {
+                    if (currentModelUrlForRevoke) {
+                        URL.revokeObjectURL(currentModelUrlForRevoke);
+                    }
+                    modelUrl = URL.createObjectURL(file);
+                    currentModelUrlForRevoke = modelUrl;
+                } else {
+                    modelUrl = url;
+                }
+
+                const gltf = await new Promise((resolve, reject) => {
+                    loader.load(modelUrl, resolve, undefined, reject);
+                });
+
+                if (currentModel) {
+                    scene.remove(currentModel);
+                }
+                if (particlesObject) {
+                    scene.remove(particlesObject);
+                    particlesObject = null;
+                }
+
+                currentModel = gltf.scene;
+                
+                // Scale and center the model
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = 2 / maxDim;
+                
+                currentModel.scale.multiplyScalar(scale);
+                currentModel.position.sub(center.multiplyScalar(scale));
+
+                // Enable shadows
+                currentModel.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                scene.add(currentModel);
+                isAssembled = true;
+                
+                assembleButton.disabled = false;
+                shatterButton.disabled = false;
+                
+                loadingMessage.style.display = 'none';
+                showStatus('✅ המודל נטען בהצלחה!', 2000);
+                instructions.style.opacity = '1';
+
+            } catch (error) {
+                console.error('Error loading model:', error);
+                loadingMessage.style.display = 'none';
+                showMessage(errorMessage);
+                showStatus('❌ שגיאה בטעינת המודל', 2000);
+            } finally {
+                loadModelButton.disabled = false;
+            }
+        }
+
+        function extractVerticesFromModel(object) {
+            const vertices = [];
+            const colors = [];
+
+            object.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    const geometry = child.geometry;
+                    const position = geometry.attributes.position;
+                    const color = geometry.attributes.color;
+                    
+                    const matrix = child.matrixWorld;
+
+                    for (let i = 0; i < position.count; i++) {
+                        const vertex = new THREE.Vector3(
+                            position.getX(i),
+                            position.getY(i),
+                            position.getZ(i)
+                        );
+                        vertex.applyMatrix4(matrix);
+                        vertices.push(vertex);
+
+                        if (color) {
+                            colors.push(new THREE.Color(color.getX(i), color.getY(i), color.getZ(i)));
+                        } else if (child.material && child.material.color) {
+                            colors.push(child.material.color.clone());
+                        } else {
+                            colors.push(new THREE.Color(Math.random(), Math.random(), Math.random()));
+                        }
+                    }
+                }
+            });
+
+            return { vertices, colors };
+        }
+
+        function createParticleSystem(vertices, colors) {
+            const particleCount = Math.min(vertices.length, 10000);
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const particleColors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+
+            targetPositions = new Float32Array(particleCount * 3);
+            currentPositions = new Float32Array(particleCount * 3);
+            particleData = [];
+
+            for (let i = 0; i < particleCount; i++) {
+                const vertex = vertices[i % vertices.length];
+                const color = colors[i % colors.length];
+
+                targetPositions[i * 3] = vertex.x;
+                targetPositions[i * 3 + 1] = vertex.y;
+                targetPositions[i * 3 + 2] = vertex.z;
+
+                const randomPosition = new THREE.Vector3(
+                    (Math.random() - 0.5) * 20,
+                    (Math.random() - 0.5) * 20,
+                    (Math.random() - 0.5) * 20
+                );
+
+                positions[i * 3] = randomPosition.x;
+                positions[i * 3 + 1] = randomPosition.y;
+                positions[i * 3 + 2] = randomPosition.z;
+
+                currentPositions[i * 3] = randomPosition.x;
+                currentPositions[i * 3 + 1] = randomPosition.y;
+                currentPositions[i * 3 + 2] = randomPosition.z;
+
+                particleColors[i * 3] = color.r;
+                particleColors[i * 3 + 1] = color.g;
+                particleColors[i * 3 + 2] = color.b;
+
+                sizes[i] = Math.random() * 0.05 + 0.02;
+
+                particleData.push({
+                    velocity: new THREE.Vector3(0, 0, 0),
+                    lifetime: 0,
+                    originalTarget: new THREE.Vector3(vertex.x, vertex.y, vertex.z)
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute vec3 color;
+                    varying vec3 vColor;
+                    
+                    void main() {
+                        vColor = color;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (300.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    
+                    void main() {
+                        float r = distance(gl_PointCoord, vec2(0.5, 0.5));
+                        if (r > 0.5) discard;
+                        
+                        float alpha = 1.0 - (r * 2.0);
+                        gl_FragColor = vec4(vColor, alpha);
+                    }
+                `,
+                transparent: true,
+                vertexColors: true
+            });
+
+            return new THREE.Points(geometry, material);
+        }
+
+        function assembleModel() {
+            if (!particlesObject || isAssembled) return;
+
+            isShattering = false;
+            isAssembled = false;
+
+            for (let i = 0; i < particleData.length; i++) {
+                particleData[i].velocity.set(0, 0, 0);
+                particleData[i].lifetime = 0;
+            }
+
+            showStatus('🔄 מרכיב מודל...', 1000);
+            
+            setTimeout(() => {
+                isAssembled = true;
+                if (currentModel) {
+                    currentModel.visible = true;
+                }
+                if (particlesObject) {
+                    scene.remove(particlesObject);
+                    particlesObject = null;
+                }
+                showStatus('✅ המודל הורכב!', 1000);
+            }, 2000);
+        }
+
+        function shatterModel() {
+            if (!currentModel || !isAssembled || isShattering) return;
+
+            isShattering = true;
+            isAssembled = false;
+
+            const { vertices, colors } = extractVerticesFromModel(currentModel);
+            
+            if (particlesObject) {
+                scene.remove(particlesObject);
+            }
+            
+            particlesObject = createParticleSystem(vertices, colors);
+            scene.add(particlesObject);
+            
+            currentModel.visible = false;
+
+            for (let i = 0; i < particleData.length; i++) {
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 15,
+                    Math.random() * 10 + 5,
+                    (Math.random() - 0.5) * 15
+                );
+                particleData[i].velocity = velocity;
+                particleData[i].lifetime = 0;
+            }
+
+            setTimeout(() => {
+                isShattering = false;
+            }, 1000);
+        }
+
+        function updateParticles(deltaTime) {
+            if (!particlesObject || isAssembled) return;
+
+            const positions = particlesObject.geometry.attributes.position.array;
+            const gravity = new THREE.Vector3(0, -9.8, 0);
+
+            for (let i = 0; i < particleData.length; i++) {
+                const data = particleData[i];
+                data.lifetime += deltaTime;
+
+                if (isShattering) {
+                    data.velocity.add(gravity.clone().multiplyScalar(deltaTime));
+                    data.velocity.multiplyScalar(0.98);
+                } else {
+                    const targetX = targetPositions[i * 3];
+                    const targetY = targetPositions[i * 3 + 1];
+                    const targetZ = targetPositions[i * 3 + 2];
+
+                    const currentX = positions[i * 3];
+                    const currentY = positions[i * 3 + 1];
+                    const currentZ = positions[i * 3 + 2];
+
+                    const toTarget = new THREE.Vector3(
+                        targetX - currentX,
+                        targetY - currentY,
+                        targetZ - currentZ
+                    );
+
+                    const distance = toTarget.length();
+                    if (distance > 0.01) {
+                        toTarget.normalize();
+                        data.velocity.add(toTarget.multiplyScalar(5 * deltaTime));
+                        data.velocity.multiplyScalar(0.9);
+                    } else {
+                        data.velocity.multiplyScalar(0.8);
+                    }
+                }
+
+                positions[i * 3] += data.velocity.x * deltaTime;
+                positions[i * 3 + 1] += data.velocity.y * deltaTime;
+                positions[i * 3 + 2] += data.velocity.z * deltaTime;
+
+                currentPositions[i * 3] = positions[i * 3];
+                currentPositions[i * 3 + 1] = positions[i * 3 + 1];
+                currentPositions[i * 3 + 2] = positions[i * 3 + 2];
+            }
+
+            particlesObject.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            controls.update();
+            updateParticles(deltaTime);
+            
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
